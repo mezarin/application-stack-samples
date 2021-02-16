@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 IBM Corporation and others
+ * Copyright (c) 2019, 2020 IBM Corporation and others
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -55,7 +55,7 @@ import javax.faces.context.FacesContext;
 @Consumes(MediaType.APPLICATION_JSON)
 public class PersonResource {
 
-    Collection people;
+    Collection<Person> people;
  
     @PersistenceContext(unitName = "jpa-unit")
     EntityManager em;

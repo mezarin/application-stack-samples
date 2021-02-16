@@ -1,0 +1,120 @@
+group = 'dev.odo.starter.java-openliberty'
+description = 'jpa-starter-app'
+
+// Repositories to use.
+repositories {
+    mavenCentral()
+}
+
+// Plugins.
+apply plugin: 'java'
+apply plugin: 'war'
+apply plugin: 'liberty'
+ 
+// Java properties.
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+compileJava.options.encoding = 'UTF-8'
+
+// App/library dependencies.
+configurations {
+    postgresql
+}
+
+// Software dependencies.
+dependencies {
+    postgresql 'org.postgresql:postgresql:42.1.1'
+    implementation 'mysql:mysql-connector-java:8.0.21'
+    testImplementation 'org.microshed:microshed-testing-liberty:0.9'
+    testImplementation 'org.slf4j:slf4j-log4j12:1.7.29'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.6.0'
+    testImplementation 'junit:junit:4.12'
+    testImplementation 'org.apache.cxf:cxf-rt-rs-client:3.2.6'
+    testImplementation 'org.apache.cxf:cxf-rt-rs-extension-providers:3.2.6'
+    testImplementation 'org.glassfish:javax.json:1.0.4'
+    testImplementation 'javax.xml.bind:jaxb-api:2.3.1'
+    testImplementation 'com.sun.xml.bind:jaxb-core:2.3.0.1'
+    testImplementation 'com.sun.xml.bind:jaxb-impl:2.3.2'
+    testImplementation 'javax.activation:activation:1.1.1'
+    providedCompile 'org.eclipse.microprofile:microprofile:3.3'
+    providedCompile 'javax:javaee-api:8.0.1'
+}
+
+// Liberty-gradle-plugin.
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'io.openliberty.tools:liberty-gradle-plugin:3.0'
+    }
+}
+
+// Property definitions.
+ext {
+    httpPort = "9080"
+    httpsPort = "9443"
+}
+
+// Open Liberty definitions.
+liberty {
+    runtime = ['group':'io.openliberty','name':'openliberty-kernel','version':System.getProperty("liberty.runtime.version")]
+
+    server {
+        bootstrapProperties = ['default.http.port':httpPort,'default.https.port':httpsPort]
+    }
+}
+
+// InstallLiberty task wrapper to work around issue: https://github.com/OpenLiberty/ci.gradle/issues/221.
+installLiberty {
+    doFirst{
+        // Delete the stack provided Open Liberty runtime if the specified Open Liberty version
+        // is different than the version of the existing Open Liberty runtime. This allows for the
+        // correct Open Liberty version to be installed.
+        def olPropsFile = new File("${project.projectDir.toString()}/build/wlp/lib/versions/openliberty.properties")
+        if (olPropsFile.canRead()) {
+            olPropsFile.eachLine {
+                line -> if (line.startsWith("com.ibm.websphere.productVersion=")) {
+                    def olVersion =  line.substring(line.indexOf("=")+1).trim()
+                    if (!olVersion.equals(System.getProperty("liberty.runtime.version"))) {
+                        delete "${project.projectDir.toString()}/build/wlp"
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Task that allows archive dependencies to be copied to the Open Liberty installation.
+task copyDriver(type: Copy) {
+    from configurations.postgresql
+    include '**/*.jar'
+    println project.projectDir.toString()
+    into "${projectDir.toString()}/build/wlp/usr/shared/resources"
+    rename 'postgresql.*jar', 'postgresql.jar'
+}
+
+// Test definitions.
+test {
+    useJUnitPlatform()
+    reports.html.destination = file("$buildDir/reports/unit")
+    reports.junitXml.destination = file("$buildDir/test-results/unit")
+    testLogging {
+            displayGranularity 1
+            showStandardStreams = true
+            showStackTraces = true
+            exceptionFormat = 'full'
+            events 'PASSED', 'FAILED', 'SKIPPED'
+    }
+    systemProperty 'liberty.test.port', "9080"
+    systemProperty 'microshed_manual_env', "true"
+    systemProperty 'microshed_hostname', "localhost"
+    systemProperty 'microshed_http_port', "9080"
+    systemProperty 'microshed_https_port', "-1"
+    systemProperty 'microshed_app_context_root', '/'
+}
+
+// Task dependencies.
+test.dependsOn 'libertyStart'
+libertyCreate.finalizedBy 'copyDriver'
+clean.dependsOn 'libertyStop'
